@@ -8,10 +8,12 @@ export function useSocket() {
   // Event buffer — stores events emitted before the socket is fully ready
   const emitBuffer = useRef([]);
 
+  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL
+
   // Create socket instance once
   if (!socketRef.current) {
-    socketRef.current = io("http://localhost:5000", {
-      transports: ["websocket"],
+    socketRef.current = io(SOCKET_URL, {
+      transports: ["websocket", "polling"],
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: 8,

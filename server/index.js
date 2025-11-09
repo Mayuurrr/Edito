@@ -1,14 +1,16 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
-import path from "path";
 import axios from "axios";
 
 const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: { origin: "*" },
+  cors: {
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    methods: ["GET", "POST"],
+  },
 });
 
 /*
@@ -30,8 +32,6 @@ const io = new Server(server, {
   )
  --------------------------------------------------------------------
 */
-
-const rooms = new Map();
 
 io.on("connection", (socket) => {
   console.log("User Connected:", socket.id);
@@ -169,9 +169,7 @@ io.on("connection", (socket) => {
 
       io.to(currentRoom).emit("userJoined", Array.from(room.users.values()));
 
-      if (room.users.size === 0) {
-        rooms.delete(currentRoom);
-      }
+      if (room.users.size === 0) rooms.delete(currentRoom);
     }
 
     socket.leave(currentRoom);
@@ -192,25 +190,20 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
-    const response = await axios.post("https://emkc.org/api/v2/piston/execute", {
-      language,
-      version,
-      files: [{ content: code }],
-      stdin: input,
-    });
+    try {
+      const response = await axios.post("https://emkc.org/api/v2/piston/execute", {
+        language,
+        version,
+        files: [{ content: code }],
+        stdin: input,
+      });
 
-    io.to(roomId).emit("codeResponse", response.data);
+      io.to(roomId).emit("codeResponse", response.data);
+    } catch (err) {
+      io.to(roomId).emit("codeResponse", { error: "Compilation failed", details: err.message });
+    }
   });
 
-  /*
-    ------------------------------------------------------------------
-    SOCKET DISCONNECT HANDLER
-    ------------------------------------------------------------------
-    - Runs when user's browser closes or network drops
-    - Removes user from room
-    - Broadcasts updated user list
-    - Deletes room if empty
-  */
   socket.on("disconnect", () => {
     console.log("User Disconnected:", socket.id);
 
@@ -219,30 +212,15 @@ io.on("connection", (socket) => {
 
       if (room) {
         room.users.delete(currentUserId);
-
         io.to(currentRoom).emit("userJoined", Array.from(room.users.values()));
 
-        if (room.users.size === 0) {
-          rooms.delete(currentRoom);
-        }
+        if (room.users.size === 0) rooms.delete(currentRoom);
       }
     }
   });
 });
 
-/*
- --------------------------------------------------------------------
-  EXPRESS STATIC SERVE
- --------------------------------------------------------------------
-*/
 const port = process.env.PORT || 5000;
-const __dirname = path.resolve();
-
-app.use(express.static(path.join(__dirname, "/frontend/dist")));
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend", "dist", "index.html"));
-});
 
 server.listen(port, () => {
   console.log("Server running on port", port);
