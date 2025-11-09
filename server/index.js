@@ -6,6 +6,8 @@ import axios from "axios";
 const app = express();
 const server = http.createServer(app);
 
+const rooms = new Map();
+
 const io = new Server(server, {
   cors: {
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
